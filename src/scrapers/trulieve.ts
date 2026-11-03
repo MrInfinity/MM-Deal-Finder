@@ -68,6 +68,16 @@ function categorize(paths: string[]): { category: Category; subcategory: string 
   return { category: 'other', subcategory: '' };
 }
 
+// Top-level category paths that are product types; anything else is a merchandising collection
+// ("TRUsday Deals", "Fire Friday", "Bud Bargains", ...).
+const PRODUCT_ROOTS = new Set(['flower', 'vapes', 'concentrates', 'edibles', 'oral', 'sublinguals', 'topicals',
+  'accessories', 'brands', 'trupods-and-trustiks', 'nasal']);
+
+/** "New FL - $35 Live Resin, Budder (month long) PS4" → "$35 Live Resin, Budder (month long)" */
+export function cleanTrulievePromo(s: string): string {
+  return cleanText(s).replace(/^(new\s+)?fl\s*-\s*/i, '').replace(/\s+PS\d+\s*$/i, '').replace(/^AZ-.*$/i, '').trim();
+}
+
 function toProduct(store: Store, it: any, scrapedAt: string): Product | null {
   // In-stock checks: product flag must say IN_STOCK, the store's count must be > 0,
   // and a configurable product needs at least one in-stock batch.
@@ -117,7 +127,10 @@ function toProduct(store: Store, it: any, scrapedAt: string): Product | null {
     cbdPct: null,
     price: regular || final,
     salePrice: final > 0 && final < regular ? final : null,
-    promo: cleanText(it.opps_promo?.promo_name),
+    promo: cleanTrulievePromo(it.opps_promo?.promo_name ?? ''),
+    collections: [...new Set((it.categories ?? [])
+      .filter((c: any) => c?.url_path && !c.url_path.includes('/') && !PRODUCT_ROOTS.has(c.url_path))
+      .map((c: any) => cleanText(c.name)))] as string[],
     qtyAvailable: qty,
     url: it.url_key ? `${BASE}/${it.url_key}` : BASE,
     image: it.small_image?.url ?? '',

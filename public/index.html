@@ -39,7 +39,7 @@
     <div class="examples" id="examples" aria-label="Example searches"></div>
 
     <div class="where">
-      <label class="zipl"><span class="sr">ZIP code</span><input id="zip" name="zip" inputmode="numeric" maxlength="5" pattern="\d{5}" placeholder="ZIP code" autocomplete="postal-code"></label>
+      <label class="zipl"><span class="sr">ZIP code</span><input id="zip" name="zip" inputmode="numeric" maxlength="5" pattern="\d{5}" placeholder="ZIP code" autocomplete="off"></label>
       <button type="button" id="locate" class="locate" title="Use my location">
         <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>
         <span>Near me</span>
@@ -140,6 +140,16 @@
     <section id="products"></section>
     <section id="nomenu"></section>
   </div>
+
+  <section id="insights" class="panel" aria-labelledby="insightsTitle" hidden>
+    <h2 id="insightsTitle">Florida price snapshot</h2>
+    <div id="insightsBody"></div>
+  </section>
+
+  <section id="deals" class="panel" aria-labelledby="dealsTitle" hidden>
+    <h2 id="dealsTitle">Deals &amp; sales</h2>
+    <div id="dealsBody"></div>
+  </section>
 </main>
 
 <footer>
@@ -152,7 +162,7 @@
     <p><b>Stock &amp; prices.</b> Only items the dispensary reports as in stock are shown, using menus refreshed several times a day.
       Things can sell out between refreshes, so confirm on the dispensary's site before you go. On Trulieve's site, select the same store first:
       it shows stock for whichever store you have selected there. Prices are menu prices before any loyalty or first-time discounts. Store hours are regular weekly hours; holidays may differ.</p>
-    <p><b>Privacy.</b> No accounts and no tracking. Your ZIP and settings are stored only in your browser. “Near me” uses your location once to pick the nearest ZIP code; it isn't stored or shared, and shared links never include your ZIP.</p>
+    <p><b>Privacy.</b> No accounts and no tracking. Nothing you enter is saved; every visit starts fresh. “Near me” uses your location once to pick the nearest ZIP code; it isn't stored or shared, and shared links never include your ZIP.</p>
     <p><b>Not affiliated</b> with any dispensary. Not medical advice. Florida medical marijuana purchases require an active
       Medical Marijuana Use Registry card, and state purchase limits apply.</p>
   </details>

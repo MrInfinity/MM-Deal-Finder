@@ -8,7 +8,7 @@ Type what you want, such as `2 oz flower`, `an eighth over 25%` or `1000mg gummi
 
 ## Features
 
-- **Search where you are.** Enter a ZIP or tap **Near me**, and pick a radius (5–100 mi or anywhere in Florida). Your ZIP stays in your browser and is never put in shared links.
+- **Search where you are.** Enter a ZIP or tap **Near me**, and pick a radius (5–100 mi or anywhere in Florida). Nothing you enter is saved, and shared links never include your location.
 - **Plain-language search:** amounts (`2 oz`, `an eighth`, `half oz`, `1000mg`), categories (`flower`, `vape carts`, `live rosin`, `gummies`), strain types, THC (`over 25%`, `under 18%`), price (`under $40`, `under 40`), or any strain, brand or product name.
 - **Best ways to buy an amount.** A bounded-knapsack optimizer finds the cheapest mix of package sizes at a single store that reaches your amount, using live stock counts (4 × 14g vs 2 × 28g vs 8 × 7g).
   - Strains with the same price and size are folded into "Same price, other strains".
@@ -18,6 +18,15 @@ Type what you want, such as `2 oz flower`, `an eighth over 25%` or `1000mg gummi
 - **Quick filters:** Open now, On sale, No shake/ground.
 - **More filters:** category, package size, min/max THC, max price, strain type, dispensary chain, and specific stores (with an "only these stores" option). Sort by $/g, $/mg THC, price, THC % or distance.
 - **Helpful empty states**, with one-tap fixes such as "Search a wider area" or "Include closed stores".
+- **Florida price snapshot** (below the results, visible on arrival), computed from every in-stock listing statewide:
+  - whole-flower median price per gram by THC % and by package size, with tooltips and a table view;
+  - cost per 100 mg of THC by product type, typical $/g per chain, how much of the menu is on sale, and short takeaways.
+- **Deals & sales:**
+  - upcoming big sale days (Green Wednesday, Black Friday, Cyber Monday, 4/20, 7/10) with a countdown;
+  - sales running now, grouped by chain, with their end times;
+  - weekly deal days (e.g. Trulieve "Wellness Wednesday") and multi-buy bundles found in the menus;
+  - discounts worth asking about (new patient, veteran, senior, SNAP).
+- **Sale prices expire on time.** MÜV promotion schedules give each sale an end time; after it passes, search and buy plans use the regular price, and results ending within 3 days say "sale ends …".
 - **Shareable searches:** the URL holds the search (never your location), with a Share button.
 - **Installable:** add it to your home screen. Works in light and dark mode.
 - **In stock only:**
@@ -83,6 +92,7 @@ GET /api/search?q=2 oz flower&zip=<ZIP>&radius=25|any
 GET /api/stores?zip=<ZIP>&radius=50
 GET /api/meta
 GET /api/nearzip?lat=..&lng=..                 # nearest Florida ZIP (for "Near me")
+GET /api/insights                              # statewide price snapshot + deals (static site: data/insights.json)
 GET /api/verify?ids=<product ids, max 40>      # live stock re-check (server only)
 ```
 
@@ -98,11 +108,12 @@ src/
   normalize.ts   sizes ("1/8 oz", "100mg [10-Pack]"), categories, strain types, grouping keys
   hours.ts       store hours parsing, time zones, open/closed labels
   query.ts       free-text query parser
+  insights.ts    statewide price snapshot, current/weekly/bundle deals, annual sale days
   engine.ts      filtering, ranking, min-cost-cover optimizer, plan grouping (pure; also runs in-browser)
   api.ts         request → engine (shared by server and static site)
   db.ts          SQLite schema + snapshot replace
   server.ts      HTTP server + live stock re-check
-public/          mobile-first UI (vanilla JS); static-api.js = in-browser API for the static site
+public/          mobile-first UI (vanilla JS); insights.js = snapshot charts + deals; static-api.js = in-browser API for the static site
 scripts/         build-site.ts (GitHub Pages), build-demo.ts (single-file snapshot), bundle-lib.ts
 .github/workflows/refresh.yml   scheduled scrape → build → deploy
 ```

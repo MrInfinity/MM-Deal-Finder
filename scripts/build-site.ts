@@ -13,6 +13,7 @@ import { parseArgs } from 'node:util';
 import { openDb, allStores, productsForStores } from '../src/db.ts';
 import type { Product, Store } from '../src/types.ts';
 import { bundleLib } from './bundle-lib.ts';
+import { computeInsights } from '../src/insights.ts';
 
 const { values: args } = parseArgs({
   options: {
@@ -102,6 +103,10 @@ const meta = {
   refreshNote: args['refresh-note'],
 };
 writeFileSync(new URL('data/stores.json', OUT), JSON.stringify({ meta, stores: storeList }));
+// Statewide market insights + deals, from every menu in this build.
+const allProducts = [...menus.values()].flat();
+const insights = computeInsights([...stores.values()], allProducts);
+writeFileSync(new URL('data/insights.json', OUT), JSON.stringify(insights));
 copyFileSync(new URL('data/fl-zips.json', root), new URL('data/fl-zips.json', OUT));
 
 // 4) Write app files.
@@ -109,6 +114,7 @@ const read = (p: string) => readFileSync(new URL(p, root), 'utf8');
 writeFileSync(new URL('lib.js', OUT), `(function(){\n${bundleLib()}\nwindow.FLDF_LIB = { route, selectStores, haversineMi, openStatus };\n})();\n`);
 copyFileSync(new URL('public/static-api.js', root), new URL('static-api.js', OUT));
 copyFileSync(new URL('public/app.js', root), new URL('app.js', OUT));
+copyFileSync(new URL('public/insights.js', root), new URL('insights.js', OUT));
 copyFileSync(new URL('public/styles.css', root), new URL('styles.css', OUT));
 for (const f of ['favicon.svg', 'icon-180.png', 'icon-192.png', 'icon-512.png', 'manifest.webmanifest']) copyFileSync(new URL(`public/${f}`, root), new URL(f, OUT));
 let html = read('public/index.html').replace('<script src="app.js" type="module"></script>',

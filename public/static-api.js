@@ -44,6 +44,7 @@
   window.FLDF_API = async (path, qs) => {
     await init();
     if (path === '/api/meta') return index.meta;
+    if (path === '/api/insights') return load('data/insights.json');
     let products = [];
     if (path === '/api/search') {
       const zip = (qs.get('zip') || '').trim();

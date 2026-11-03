@@ -176,3 +176,69 @@ test('open-now and on-sale filters', () => {
   assert.deepEqual(search([a, b], products, { openNow: true, now }).products.map((p) => p.id), ['1']);
   assert.deepEqual(search([a, b], products, { saleOnly: true }).products.map((p) => p.id), ['1']);
 });
+
+test('sale prices stop applying when the promo ends', async () => {
+  const { zonedToUtc } = await import('../src/hours.ts');
+  const { promoEndsAt } = await import('../src/scrapers/muv.ts');
+  assert.equal(zonedToUtc('2026-11-05', '20:30'), '2026-11-06T01:30:00.000Z'); // EST
+  assert.equal(zonedToUtc('2026-07-10', '12:00'), '2026-07-10T16:00:00.000Z'); // EDT
+  assert.equal(promoEndsAt({ endDate: '2026-11-03T00:00:00Z', interval: ['20:30', '12:00'] }), '2026-11-03T17:00:00.000Z');
+  assert.equal(promoEndsAt({ endDate: null, interval: [] }), null);
+  const st = store('muv:a', 'muv', 28.54, -81.38);
+  const p = prod({ id: 's', storeId: 'muv:a', name: 'Sale', amount: 3.5, price: 40, salePrice: 20, saleEndsAt: '2026-11-03T17:00:00.000Z' });
+  const before = search([st], [p], { now: Date.parse('2026-11-03T16:00:00Z') }).products[0];
+  const after = search([st], [p], { now: Date.parse('2026-11-03T18:00:00Z') }).products[0];
+  assert.equal(before.effectivePrice, 20);
+  assert.equal(after.effectivePrice, 40);
+  assert.equal(search([st], [p], { saleOnly: true, now: Date.parse('2026-11-03T18:00:00Z') }).products.length, 0);
+});
+
+test('insights: price by THC, sizes, THC value, deals and sale days', async () => {
+  const { computeInsights, upcomingSaleDays, weekdayOf, saleDaysForYear } = await import('../src/insights.ts');
+  const thanksgiving2026 = saleDaysForYear(2026).find((d) => d.name === 'Green Wednesday')!;
+  assert.equal(thanksgiving2026.date, '2026-11-25');
+  assert.equal(saleDaysForYear(2027).find((d) => d.name === 'Black Friday')!.date, '2027-11-26');
+  const up = upcomingSaleDays(new Date('2026-11-03T12:00:00Z'));
+  assert.deepEqual(up.map((u) => u.name), ['Green Wednesday', 'Black Friday', 'Cyber Monday', '4/20']);
+  assert.equal(up[0].daysAway, 22);
+  assert.equal(weekdayOf('TRUsday Deals'), 'Tuesday');
+  assert.equal(weekdayOf('Fire Friday'), 'Friday');
+  assert.equal(weekdayOf('Bud Bargains'), null);
+  assert.equal(weekdayOf('Sun Grown Specials'), null);
+  assert.equal(weekdayOf('4 for $100 Monster Mix & Match'), null);
+  assert.equal(weekdayOf('Wellness Wednesday'), 'Wednesday');
+
+  const st = [store('muv:a', 'muv', 28.54, -81.38), store('tru:b', 'trulieve', 28.6, -81.3)];
+  const ps: Product[] = [];
+  for (let i = 0; i < 40; i++) {
+    ps.push(prod({ id: `lo${i}`, storeId: 'muv:a', name: `Lo ${i}`, amount: 3.5, price: 21, thcPct: 16 }));               // $6/g
+    ps.push(prod({ id: `hi${i}`, storeId: 'tru:b', name: `Hi ${i}`, amount: 3.5, price: 42, thcPct: 31,
+      salePrice: 35, promo: 'Fall Flower Sale', collections: ['TRUsday Deals'] }));                                          // $10/g on sale
+    ps.push(prod({ id: `oz${i}`, storeId: 'tru:b', name: `Oz ${i}`, amount: 14, price: 70, thcPct: 22 }));                 // $5/g
+    ps.push(prod({ id: `ed${i}`, storeId: 'muv:a', name: `Gummy ${i}`, category: 'edible', amount: 100, amountUnit: 'mg', thcMg: 100, thcPct: null, price: 20 }));
+  }
+  const ins = computeInsights(st, ps, Date.parse('2026-11-03T12:00:00Z'));
+  assert.equal(ins.listings, 160);
+  assert.deepEqual(ins.flowerByThc.map((b) => [b.label, b.median]), [['15–18%', 6], ['21–24%', 5], ['30%+', 10]]);
+  assert.deepEqual(ins.flowerBySize.map((s) => [s.size, s.median]), [[3.5, 8], [14, 5]]);
+  assert.equal(ins.thcValue[0].label, 'Flower');
+  assert.equal(ins.thcValue.at(-1)!.label, 'Edibles');
+  assert.equal(ins.deals.current[0].name, 'Fall Flower Sale');
+  assert.equal(ins.deals.current[0].medianOffPct, 17);
+  assert.deepEqual(ins.deals.weekly.map((w) => [w.day, w.name, w.listings]), [['Tuesday', 'TRUsday Deals', 40]]);
+  assert.ok(ins.takeaways.some((t) => t.startsWith('THC drives flower prices')));
+  assert.ok(ins.takeaways.some((t) => t.includes('Best bulk value: 14g')));
+});
+
+test('each current deal shows its own end time, not an overlapping promo’s', async () => {
+  const { computeInsights } = await import('../src/insights.ts');
+  const st = [store('muv:a', 'muv', 28.54, -81.38)];
+  const ps: Product[] = [];
+  for (let i = 0; i < 25; i++) ps.push(prod({ id: `x${i}`, storeId: 'muv:a', name: `X ${i}`, amount: 1, price: 50, salePrice: 30,
+    promo: 'Flash Sale · Extracts: 40% OFF', saleEndsAt: '2026-11-03T17:00:00.000Z',
+    promoEnds: { 'Flash Sale': '2026-11-03T17:00:00.000Z', 'Extracts: 40% OFF': '2026-11-06T01:30:00.000Z' } }));
+  const ins = computeInsights(st, ps, Date.parse('2026-11-03T12:00:00Z'));
+  const ends = Object.fromEntries(ins.deals.current.map((d) => [d.name, d.endsAt]));
+  assert.equal(ends['Flash Sale'], '2026-11-03T17:00:00.000Z');
+  assert.equal(ends['Extracts: 40% OFF'], '2026-11-06T01:30:00.000Z');
+});

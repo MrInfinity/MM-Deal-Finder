@@ -99,7 +99,9 @@ export function selectStores(stores: Store[], p: SearchParams): Array<{ store: S
   return out;
 }
 
-export function effectivePrice(p: Product): number {
+/** Price you'd pay: the sale price while its promo is running, otherwise the regular price. */
+export function effectivePrice(p: Product, now: number = Date.now()): number {
+  if (p.saleEndsAt && Date.parse(p.saleEndsAt) <= now) return p.price;
   return p.salePrice != null && p.salePrice > 0 && p.salePrice < p.price ? p.salePrice : p.price;
 }
 
@@ -109,8 +111,8 @@ function thcMgOf(p: Product): number | null {
   return null;
 }
 
-export function enrich(p: Product, store: Store, distanceMi: number | null): ProductHit {
-  const eff = effectivePrice(p);
+export function enrich(p: Product, store: Store, distanceMi: number | null, now: number = Date.now()): ProductHit {
+  const eff = effectivePrice(p, now);
   const mg = thcMgOf(p);
   return {
     ...p,
@@ -145,7 +147,7 @@ export function matches(p: Product, store: Store, sp: SearchParams): boolean {
     const hi = p.thcPctMax ?? p.thcPct;
     if (hi == null || hi > sp.maxThc) return false;
   }
-  const eff = effectivePrice(p);
+  const eff = effectivePrice(p, sp.now ?? Date.now());
   if (sp.maxPrice != null && eff > sp.maxPrice) return false;
   if (sp.saleOnly && !(eff < p.price - 0.005)) return false;
   if (sp.target && (p.amountUnit !== sp.target.unit || !p.amount)) return false;
@@ -300,7 +302,7 @@ export function search(stores: Store[], products: Product[], sp: SearchParams): 
     if (cutoff !== null && !(Date.parse(p.scrapedAt) >= cutoff)) { staleStores.add(p.storeId); continue; }
     freshStores.add(p.storeId);
     if (!matches(p, sel.store, sp)) continue;
-    hits.push(enrich(p, sel.store, sel.distanceMi));
+    hits.push(enrich(p, sel.store, sel.distanceMi, sp.now ?? Date.now()));
   }
   const sorted = hits.sort(SORTERS[sp.sort ?? 'unit']);
   const plans = sp.target ? sortPlans(buildPlans(hits, sp.target, sp.includeMixPlans ?? true), sp.planSort ?? 'price') : [];

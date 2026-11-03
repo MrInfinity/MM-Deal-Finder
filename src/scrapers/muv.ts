@@ -5,7 +5,15 @@ import type { Category, Product, Store } from '../types.ts';
 import type { OperatorScraper } from './types.ts';
 import { getJson, getText } from './http.ts';
 import { cleanText, makeGroupKey, normalizeCategory, normalizeStrainType, num, pct } from '../normalize.ts';
-import { DAYS, emptyWeek, to24h } from '../hours.ts';
+import { DAYS, emptyWeek, to24h, zonedToUtc } from '../hours.ts';
+
+/** When a Sweed promo stops: its end date + the end of its time window, Florida local time. */
+export function promoEndsAt(promo: any, timeZone = 'America/New_York'): string | null {
+  if (!promo?.endDate) return null; // open-ended ("Daily") promos
+  const date = String(promo.endDate).slice(0, 10);
+  const end = Array.isArray(promo.interval) && /^\d\d:\d\d$/.test(promo.interval[1]) ? promo.interval[1] : '23:59';
+  return zonedToUtc(date, end, timeZone);
+}
 
 const DAY_NAMES: Record<string, string> = { sun: 'sunday', mon: 'monday', tue: 'tuesday', wed: 'wednesday', thu: 'thursday', fri: 'friday', sat: 'saturday' };
 function muvHours(h: any) {
@@ -25,6 +33,19 @@ function muvHours(h: any) {
 
 const SITE = 'https://muvfl.com';
 const SWEED_API = 'https://sweed.app/_api/proxy/Products/GetProductList';
+const SWEED_PROMOS = 'https://sweed.app/_api/proxy/Products/GetPromotionsList';
+
+/** The store's promotion schedule (start/end dates and times) — the product list omits them. */
+async function loadPromoSchedule(sweedId: string): Promise<Map<number, any>> {
+  try {
+    const list = await getJson(SWEED_PROMOS, {
+      method: 'POST',
+      headers: { Storeid: sweedId, SaleType: 'Medical' },
+      body: { platformOs: 'Web', saleType: 'Medical' },
+    });
+    return new Map((Array.isArray(list) ? list : []).map((x: any) => [x.id, x]));
+  } catch { return new Map(); }
+}
 
 /** Decode the React Server Components payload strings embedded in a Next.js app-router page. */
 export function decodeRscPayload(html: string): string {
@@ -124,7 +145,7 @@ function sweedCategory(cat: string, sub: string, name: string): Category {
   return normalizeCategory(cat, sub, name);
 }
 
-function variantToProduct(store: Store, p: any, v: any, scrapedAt: string, promoNames: Map<number, string>): Product | null {
+function variantToProduct(store: Store, p: any, v: any, scrapedAt: string, promoNames: Map<number, string>, promoInfo: Map<number, any> = new Map()): Product | null {
   const price = num(v.price);
   if (!price || price <= 0) return null;
   // In-stock checks: a positive stock count is required, and Sweed must say it can be ordered.
@@ -166,7 +187,19 @@ function variantToProduct(store: Store, p: any, v: any, scrapedAt: string, promo
   const promos: any[] = v.promos ?? [];
   // Conditional promos (min cart, user segment) aren't guaranteed, so don't count them as the price.
   const conditional = promos.some((x) => x?.isConditional || x?.minCartAmount || x?.matchedUserSegmentIds?.length);
-  const promo = conditional ? null : num(v.promoPrice);
+  const info = promos.map((x) => ({ ...x, ...promoInfo.get(x?.id) }));
+  const inactive = info.length > 0 && info.every((x) => x?.isActiveBySchedule === false);
+  const promo = conditional || inactive ? null : num(v.promoPrice);
+  // Which applied promo set the price isn't stated, so use the earliest end: never show a sale price
+  // after it may have expired (the next refresh restores it if another promo still applies).
+  const ends = info.map((x) => (x?.endDate ? promoEndsAt(x) : null)).filter((x): x is string => !!x).sort();
+  const saleEndsAt = promo && ends.length ? ends[0] : null;
+  const promoEnds: Record<string, string> = {};
+  for (const x of info) {
+    const nm = cleanText(promoNames.get(x?.id) || x?.name || '');
+    const e = x?.endDate ? promoEndsAt(x) : null;
+    if (nm && e) promoEnds[nm] = e;
+  }
   const promoText = promos.map((x) => promoNames.get(x?.id) || x?.name || x?.shortName).filter(Boolean).join(' · ');
   const name = cleanText(p.customName || p.name);
   const brand = cleanText(p.brand?.name);
@@ -190,6 +223,8 @@ function variantToProduct(store: Store, p: any, v: any, scrapedAt: string, promo
     price,
     salePrice: promo && promo > 0 && promo < price ? promo : null,
     promo: cleanText(promoText) + (conditional ? ' (conditional)' : ''),
+    saleEndsAt,
+    promoEnds: Object.keys(promoEnds).length ? promoEnds : undefined,
     qtyAvailable: qty,
     url: `${SITE}${muvProductPath(store.platformStoreId.split('#')[1] ?? '', p, v)}`,
     image: v.images?.[0] ?? p.images?.[0] ?? '',
@@ -233,6 +268,7 @@ export const muv: OperatorScraper = {
   async checkStock(store, products) {
     const sweedId = store.platformStoreId.split('#')[0];
     const checkedAt = new Date().toISOString();
+    const schedule = await loadPromoSchedule(sweedId);
     const fresh = new Map<string, Product>();
     for (const name of new Set(products.map((p) => p.name))) {
       const res = await getJson(SWEED_API, {
@@ -241,8 +277,10 @@ export const muv: OperatorScraper = {
         body: { filters: {}, page: 1, pageSize: 100, sorting: 0, searchTerm: name, saleType: 'Medical', platformOs: 'web', Storeid: sweedId },
       });
       const promoNames = new Map<number, string>((res.promos ?? []).map((x: any) => [x.id, x.name]));
+      const promoInfo = new Map<number, any>((res.promos ?? []).map((x: any) => [x.id, { ...x, ...schedule.get(x.id) }]));
+      for (const [id, x] of schedule) if (!promoInfo.has(id)) promoInfo.set(id, x);
       for (const p of res.list ?? []) for (const v of p.variants ?? []) {
-        const prod = variantToProduct(store, p, v, checkedAt, promoNames);
+        const prod = variantToProduct(store, p, v, checkedAt, promoNames, promoInfo);
         if (prod) fresh.set(prod.id, prod);
       }
     }
@@ -252,6 +290,7 @@ export const muv: OperatorScraper = {
   async scrapeMenu(store) {
     const sweedId = store.platformStoreId.split('#')[0];
     const scrapedAt = new Date().toISOString();
+    const schedule = await loadPromoSchedule(sweedId);
     const out: Product[] = [];
     const pageSize = 100;
     for (let page = 1; page <= 30; page++) {
@@ -262,8 +301,10 @@ export const muv: OperatorScraper = {
       });
       const list: any[] = res.list ?? [];
       const promoNames = new Map<number, string>((res.promos ?? []).map((x: any) => [x.id, x.name]));
+      const promoInfo = new Map<number, any>((res.promos ?? []).map((x: any) => [x.id, { ...x, ...schedule.get(x.id) }]));
+      for (const [id, x] of schedule) if (!promoInfo.has(id)) promoInfo.set(id, x);
       for (const p of list) for (const v of p.variants ?? []) {
-        const prod = variantToProduct(store, p, v, scrapedAt, promoNames);
+        const prod = variantToProduct(store, p, v, scrapedAt, promoNames, promoInfo);
         if (prod) out.push(prod);
       }
       if (list.length < pageSize || page * pageSize >= (res.total ?? 0)) break;

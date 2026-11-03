@@ -1,3 +1,4 @@
+import { renderInsights, renderDeals, endsLabel } from './insights.js';
 // FL Deal Finder frontend. Talks to /api/* on the Node server, or to the in-browser API
 // (static-api.js) on the static site.
 const $ = (s) => document.querySelector(s);
@@ -38,7 +39,9 @@ const DEFAULTS = {
 };
 const BOOLS = new Set(['only', 'whole', 'sale', 'open']);
 const clone = (o) => JSON.parse(JSON.stringify(o));
-const state = { ...clone(DEFAULTS), zip: saved.get('zip') || '', radius: saved.get('radius') || '25' };
+// Every visit starts empty: nothing location-related is remembered between visits.
+const state = clone(DEFAULTS);
+saved.set('zip', ''); saved.set('radius', ''); // clear values older versions stored
 
 let meta = null;
 let storeIndex = new Map(); // datalist label -> store
@@ -257,6 +260,13 @@ function statusBadge(storeId) {
   return `<span class="hours ${st.open ? (st.closingSoon ? 'soon' : 'open') : 'closed'}">${esc(st.label)}</span>`;
 }
 
+/** "sale ends today 12 PM" when a sale price stops within 3 days. */
+function saleEnds(h) {
+  if (!h.saleEndsAt || !(h.effectivePrice < h.price - 0.005)) return '';
+  const left = Date.parse(h.saleEndsAt) - Date.now();
+  return left > 0 && left < 72 * 3600_000 ? ` <span class="ends">sale ${esc(endsLabel(h.saleEndsAt))}</span>` : '';
+}
+
 function stockBadge(h) {
   const v = verified.get(h.id);
   if (v && v.inStock) return `<span class="ok">✓ in stock${v.qty != null && v.qty < 10 ? ` (${v.qty} left)` : ''} · confirmed ${ago(new Date(v.at).toISOString())}</span>`;
@@ -335,7 +345,6 @@ function applyFix(kind) {
   if (kind === 'open') state.open = false;
   if (kind === 'sale') state.sale = false;
   if (kind === 'filters') Object.assign(state, { minThc: '', maxPrice: '', sizes: [], strainType: [], whole: false });
-  saved.set('radius', state.radius);
   syncInputs(); renderControls(); go();
 }
 
@@ -344,7 +353,7 @@ function planCard(p, idx, u) {
   const save = regular - p.totalPrice;
   const thc = p.thcRange ? (p.thcRange[0] === p.thcRange[1] ? `THC ${fmtNum(p.thcRange[0])}%` : `THC ${fmtNum(p.thcRange[0])}–${fmtNum(p.thcRange[1])}%`) : '';
   const also = p.alsoAt?.length ? `<div class="also">Also in stock at the same price: ${p.alsoAt.slice(0, 3).map((a) => `${esc(a.store.name)}${a.distanceMi != null ? ` (${fmtNum(a.distanceMi)} mi)` : ''}`).join(', ')}${p.alsoAt.length > 3 ? ` +${p.alsoAt.length - 3} more` : ''}</div>` : '';
-  const lines = p.lines.map((l) => `<li><span>${l.qty} × <a href="${esc(l.product.url)}" target="_blank" rel="noopener">${esc(l.product.name)}</a> ${fmtNum(l.product.amount, 2)}${u}${l.product.thcPct != null ? ` · ${fmtNum(l.product.thcPct)}%` : ''}<br><small>${stockBadge(l.product)}</small></span><span>${money(l.product.effectivePrice)} ea</span></li>`).join('');
+  const lines = p.lines.map((l) => `<li><span>${l.qty} × <a href="${esc(l.product.url)}" target="_blank" rel="noopener">${esc(l.product.name)}</a> ${fmtNum(l.product.amount, 2)}${u}${l.product.thcPct != null ? ` · ${fmtNum(l.product.thcPct)}%` : ''}<br><small>${stockBadge(l.product)}${saleEnds(l.product)}</small></span><span>${money(l.product.effectivePrice)} ea</span></li>`).join('');
   const s = p.store;
   return `<article class="plan${idx === 0 ? ' best' : ''}">
     <div><div class="rank">${idx === 0 ? 'BEST ' : ''}#${idx + 1}${p.kind === 'mix' ? ' · MIX' : ''}</div><div class="title">${esc(p.title)}</div></div>
@@ -382,7 +391,7 @@ function prodRow(h) {
     <div class="price">${sale ? `<s>${money(h.price)}</s>` : ''}${money(h.effectivePrice)}</div>
     <div class="sub1">${[h.brand, h.subcategory, h.strainType].filter(Boolean).map(esc).join(' · ')}</div>
     <div class="ppu">${h.pricePerUnit != null ? `${money(h.pricePerUnit)}/${u}` : ''}</div>
-    <div class="sub2">${[size, thc, `${esc(h.store.operatorName)} ${esc(h.store.name)}${h.distanceMi != null ? ` · ${fmtNum(h.distanceMi)} mi` : ''}`].filter(Boolean).join(' · ')} ${statusBadge(h.store.id)}${h.promo && sale ? `<br><span class="promo">${esc(h.promo)}</span>` : ''}<br>${stockBadge(h)}${!LINKS_CARRY_STORE.has(h.store.operator) && h.store.menuUrl ? ` · <a href="${esc(h.store.menuUrl)}" target="_blank" rel="noopener">set store to ${esc(h.store.name)} on ${esc(h.store.operatorName)}'s site first</a>` : ''}</div>
+    <div class="sub2">${[size, thc, `${esc(h.store.operatorName)} ${esc(h.store.name)}${h.distanceMi != null ? ` · ${fmtNum(h.distanceMi)} mi` : ''}`].filter(Boolean).join(' · ')} ${statusBadge(h.store.id)}${h.promo && sale ? `<br><span class="promo">${esc(h.promo)}</span>${saleEnds(h)}` : ''}<br>${stockBadge(h)}${!LINKS_CARRY_STORE.has(h.store.operator) && h.store.menuUrl ? ` · <a href="${esc(h.store.menuUrl)}" target="_blank" rel="noopener">set store to ${esc(h.store.name)} on ${esc(h.store.operatorName)}'s site first</a>` : ''}</div>
   </div>`;
 }
 
@@ -436,7 +445,6 @@ async function setZip(z) {
   if (z === state.zip && $('#zip').value === z) return;
   state.zip = z;
   $('#zip').value = z;
-  if (/^\d{5}$/.test(z) || !z) saved.set('zip', z);
   await loadStores();
   go();
 }
@@ -472,12 +480,13 @@ async function init() {
   }
   renderControls();
   loadStores();
+  api('/api/insights').then((ins) => { renderInsights(ins); renderDeals(ins); }).catch(() => { /* optional section */ });
 
   $('#search').addEventListener('submit', (e) => { e.preventDefault(); state.q = $('#q').value.trim(); $('#q').blur(); pendingScroll = true; go(); });
   $('#zip').addEventListener('change', () => setZip($('#zip').value.trim()));
   $('#zip').addEventListener('input', () => { const z = $('#zip').value.trim(); if (/^\d{5}$/.test(z) && z !== state.zip) setZip(z); });
   $('#locate').addEventListener('click', locate);
-  $('#radius').addEventListener('change', () => { state.radius = $('#radius').value; saved.set('radius', state.radius); renderControls(); go(); });
+  $('#radius').addEventListener('change', () => { state.radius = $('#radius').value; renderControls(); go(); });
   for (const k of ['sort', 'planSort', 'targetUnit']) $(`#${k}`).addEventListener('change', () => { state[k] = $(`#${k}`).value; renderControls(); go(); });
   for (const k of ['minThc', 'maxPrice', 'targetAmt']) $(`#${k}`).addEventListener('change', () => { state[k] = $(`#${k}`).value.trim(); renderControls(); go(); });
   $('#qOpen').addEventListener('click', change(() => { state.open = !state.open; }));

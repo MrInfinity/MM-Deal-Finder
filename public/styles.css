@@ -175,3 +175,53 @@ footer a { color: var(--accent); }
 
 .where select { margin-left: 0; max-width: 9.5em; }
 .locate span { white-space: nowrap; }
+
+/* ---- price snapshot & deals ---- */
+:root { --series: #2a78d6; }
+@media (prefers-color-scheme: dark) { :root { --series: #3987e5; } }
+.panel { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; margin: 22px 0; }
+.panel > h2 { margin: 0 0 6px; font-size: 18px; text-transform: none; letter-spacing: -.2px; }
+.panel h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 20px 0 8px; }
+.lede { color: var(--muted); font-size: 13px; margin: 0 0 10px; }
+.takeaways { margin: 0 0 6px; padding-left: 18px; font-size: 15px; line-height: 1.45; }
+.takeaways li { margin: 5px 0; }
+.chart { margin: 20px 0 4px; }
+.chart figcaption { display: flex; flex-direction: column; gap: 2px; margin-bottom: 6px; font-size: 15px; }
+.chart figcaption span { color: var(--muted); font-size: 13px; }
+.plot { position: relative; }
+.plot svg { display: block; width: 100%; height: auto; overflow: visible; }
+.plot .bar { fill: var(--series); }
+.plot .grid { stroke: var(--line); stroke-width: 1; }
+.plot .tick { fill: var(--muted); font: 12px var(--sans); }
+.plot .val { fill: var(--ink); font: 700 12px var(--mono); }
+.plot .hit { fill: transparent; cursor: pointer; outline: none; }
+.plot .hit.on, .plot .hit:focus-visible { fill: color-mix(in srgb, var(--ink) 6%, transparent); }
+.plot .tip { position: absolute; transform: translateX(-50%); background: var(--ink); color: var(--paper); font-size: 12.5px; line-height: 1.35;
+  padding: 6px 9px; border-radius: 8px; max-width: 260px; pointer-events: none; z-index: 2; box-shadow: 0 2px 10px rgb(0 0 0 / .18); }
+.tableview { margin: 4px 0 8px; font-size: 13px; }
+.tableview summary { cursor: pointer; color: var(--accent); font-weight: 600; }
+.tableview table { border-collapse: collapse; margin-top: 6px; width: 100%; }
+.tableview th, .tableview td { text-align: left; padding: 4px 8px 4px 0; border-bottom: 1px solid var(--line); font-weight: 400; }
+.tableview thead th { color: var(--muted); font-weight: 600; }
+.tableview td { font-family: var(--mono); }
+.note2 { font-size: 13.5px; color: var(--muted); margin: 8px 0; }
+.note2 b { color: var(--ink); }
+.fine { font-size: 12px; color: var(--muted); margin: 12px 0 0; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.tile { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.tlabel { font-size: 13px; color: var(--muted); font-weight: 600; }
+.tvalue { font: 700 24px var(--sans); margin: 2px 0; }
+.tvalue small { font-size: 14px; color: var(--muted); font-weight: 600; }
+.tsub { font-size: 12.5px; color: var(--muted); }
+.dealgroup { margin: 6px 0 12px; }
+.dealop { font-weight: 800; font-size: 14px; margin-bottom: 2px; }
+.deallist { list-style: none; margin: 0; padding: 0; }
+.deallist li { display: flex; flex-direction: column; gap: 1px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.deallist li:last-child { border-bottom: 0; }
+.dname small { color: var(--muted); }
+.dmeta { color: var(--muted); font-size: 13px; }
+.when.soon, .ends { color: #9a5b00; font-weight: 700; }
+@media (prefers-color-scheme: dark) { .when.soon, .ends { color: #f0c56a; } }
+.away { display: inline-block; background: var(--chip); border-radius: 6px; padding: 0 6px; font-size: 12px; font-weight: 700; margin-left: 4px; }
+.away.today { background: var(--good-bg); color: var(--good); }
+.more-deals summary { cursor: pointer; color: var(--accent); font-weight: 600; font-size: 13.5px; margin: 6px 0; }

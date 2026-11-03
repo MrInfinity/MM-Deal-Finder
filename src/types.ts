@@ -61,6 +61,9 @@ export interface Product {
   price: number;            // regular price per package
   salePrice: number | null; // discounted price if a promo applies
   promo: string;            // promo name/description
+  saleEndsAt?: string | null;   // ISO time the sale price stops applying, when the source says
+  promoEnds?: Record<string, string>; // promo name → when that promo ends (promos with an end date)
+  collections?: string[];   // merchandising collections, e.g. Trulieve "TRUsday Deals"
   qtyAvailable: number | null;
   url: string;
   image: string;

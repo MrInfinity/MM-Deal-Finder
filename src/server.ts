@@ -12,6 +12,7 @@ import { getScraper } from './scrapers/index.ts';
 import type { Product } from './types.ts';
 import { nearestZip, zipToLatLng } from './geo.ts';
 import { route, type Snapshot } from './api.ts';
+import { computeInsights, type Insights } from './insights.ts';
 
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC_DIR = fileURLToPath(new URL('../public/', import.meta.url));
@@ -62,6 +63,16 @@ async function verify(ids: string[]) {
   return { checkedAt: new Date().toISOString(), results };
 }
 
+let insightsCache: { products: unknown; at: number; value: Insights } | null = null;
+function insights(): Insights {
+  const snap = snapshot();
+  // Recompute when data changes, and at least every 10 minutes (sales end, sale days get closer).
+  if (!insightsCache || insightsCache.products !== snap.products || Date.now() - insightsCache.at > 600_000) {
+    insightsCache = { products: snap.products, at: Date.now(), value: computeInsights(snap.stores, snap.products) };
+  }
+  return insightsCache.value;
+}
+
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon',
@@ -71,6 +82,11 @@ const MIME: Record<string, string> = {
 createServer(async (req, res) => {
   const u = new URL(req.url ?? '/', 'http://localhost');
   try {
+    if (u.pathname === '/api/insights') {
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify(insights()));
+      return;
+    }
     if (u.pathname === '/api/verify') {
       const ids = (u.searchParams.get('ids') ?? '').split(',').filter(Boolean);
       res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });

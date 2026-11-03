@@ -74,6 +74,23 @@ export function openStatus(store: Pick<Store, 'hours' | 'lat' | 'lng' | 'tz'>, n
   return { open: false, label: 'Closed' };
 }
 
+/** Wall-clock date + time in a time zone → UTC ISO string. ("2026-11-05", "20:30", "America/New_York") */
+export function zonedToUtc(date: string, time: string, timeZone = 'America/New_York'): string | null {
+  const m = `${date}T${time}`.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (!m) return null;
+  const asUtc = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]);
+  // Offset of the zone at that moment (try twice to settle across DST changes).
+  let t = asUtc;
+  for (let i = 0; i < 2; i++) {
+    const p = new Intl.DateTimeFormat('en-US', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+      .formatToParts(new Date(t));
+    const g = (k: string) => Number(p.find((x) => x.type === k)?.value);
+    const shown = Date.UTC(g('year'), g('month') - 1, g('day'), g('hour'), g('minute'));
+    t = asUtc - (shown - t);
+  }
+  return new Date(t).toISOString();
+}
+
 export function isOpenNow(store: Pick<Store, 'hours' | 'lat' | 'lng' | 'tz'>, now?: Date): boolean {
   return openStatus(store, now)?.open === true;
 }

@@ -39,6 +39,10 @@ export function openDb(path = DEFAULT_DB_PATH): DatabaseSync {
   if (!cols.has('hours')) db.exec('ALTER TABLE stores ADD COLUMN hours TEXT');
   if (!cols.has('tz')) db.exec('ALTER TABLE stores ADD COLUMN tz TEXT');
   if (!cols.has('phone')) db.exec('ALTER TABLE stores ADD COLUMN phone TEXT');
+  const pcols = new Set((db.prepare('PRAGMA table_info(products)').all() as any[]).map((c) => c.name));
+  if (!pcols.has('sale_ends_at')) db.exec('ALTER TABLE products ADD COLUMN sale_ends_at TEXT');
+  if (!pcols.has('collections')) db.exec('ALTER TABLE products ADD COLUMN collections TEXT');
+  if (!pcols.has('promo_ends')) db.exec('ALTER TABLE products ADD COLUMN promo_ends TEXT');
   return db;
 }
 
@@ -66,8 +70,8 @@ export function upsertStores(db: DatabaseSync, stores: Store[]) {
 export function replaceMenu(db: DatabaseSync, storeId: string, products: Product[]) {
   const ins = db.prepare(`INSERT OR REPLACE INTO products (id, store_id, name, brand, strain, strain_type, category,
       subcategory, amount, amount_unit, pack_count, thc_pct, thc_pct_max, thc_mg, cbd_pct, price, sale_price, promo,
-      qty_available, url, image, group_key, scraped_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+      qty_available, url, image, group_key, scraped_at, sale_ends_at, collections, promo_ends)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
   const hist = db.prepare(`INSERT OR REPLACE INTO price_history (product_id, day, price, sale_price) VALUES (?,?,?,?)`);
   const day = new Date().toISOString().slice(0, 10);
   db.exec('BEGIN');
@@ -76,7 +80,9 @@ export function replaceMenu(db: DatabaseSync, storeId: string, products: Product
     for (const p of products) {
       ins.run(p.id, p.storeId, p.name, p.brand, p.strain, p.strainType, p.category, p.subcategory, p.amount,
         p.amountUnit, p.packCount, p.thcPct, p.thcPctMax, p.thcMg, p.cbdPct, p.price, p.salePrice, p.promo,
-        p.qtyAvailable, p.url, p.image, p.groupKey, p.scrapedAt);
+        p.qtyAvailable, p.url, p.image, p.groupKey, p.scrapedAt, p.saleEndsAt ?? null,
+        p.collections?.length ? JSON.stringify(p.collections) : null,
+        p.promoEnds && Object.keys(p.promoEnds).length ? JSON.stringify(p.promoEnds) : null);
       hist.run(p.id, day, p.price, p.salePrice);
     }
     db.prepare('UPDATE stores SET last_scraped_at = ? WHERE id = ?').run(new Date().toISOString(), storeId);
@@ -88,14 +94,14 @@ export function replaceMenu(db: DatabaseSync, storeId: string, products: Product
 export function applyStockCheck(db: DatabaseSync, results: Map<string, Product | null>) {
   const del = db.prepare('DELETE FROM products WHERE id = ?');
   const upd = db.prepare(`UPDATE products SET qty_available = ?, price = ?, sale_price = ?, promo = ?,
-      thc_pct = ?, thc_pct_max = ?, scraped_at = ? WHERE id = ?`);
+      thc_pct = ?, thc_pct_max = ?, scraped_at = ?, sale_ends_at = ? WHERE id = ?`);
   const hist = db.prepare(`INSERT OR REPLACE INTO price_history (product_id, day, price, sale_price) VALUES (?,?,?,?)`);
   const day = new Date().toISOString().slice(0, 10);
   db.exec('BEGIN');
   try {
     for (const [id, p] of results) {
       if (!p) { del.run(id); continue; }
-      upd.run(p.qtyAvailable, p.price, p.salePrice, p.promo, p.thcPct, p.thcPctMax, p.scrapedAt, id);
+      upd.run(p.qtyAvailable, p.price, p.salePrice, p.promo, p.thcPct, p.thcPctMax, p.scrapedAt, p.saleEndsAt ?? null, id);
       hist.run(id, day, p.price, p.salePrice);
     }
     db.exec('COMMIT');
@@ -120,6 +126,8 @@ const rowToProduct = (r: any): Product => ({
   packCount: r.pack_count, thcPct: r.thc_pct, thcPctMax: r.thc_pct_max, thcMg: r.thc_mg, cbdPct: r.cbd_pct,
   price: r.price, salePrice: r.sale_price, promo: r.promo ?? '', qtyAvailable: r.qty_available, url: r.url,
   image: r.image, groupKey: r.group_key, scrapedAt: r.scraped_at,
+  saleEndsAt: r.sale_ends_at ?? null, collections: r.collections ? JSON.parse(r.collections) : [],
+  promoEnds: r.promo_ends ? JSON.parse(r.promo_ends) : undefined,
 });
 
 export function allStores(db: DatabaseSync): Store[] {
