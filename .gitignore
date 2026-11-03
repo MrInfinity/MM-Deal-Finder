@@ -1,0 +1,7 @@
+node_modules/
+data/deals.db*
+dist/
+*.log
+site/
+site-test/
+shards/

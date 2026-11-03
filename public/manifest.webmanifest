@@ -1,0 +1,15 @@
+{
+  "name": "FL Deal Finder",
+  "short_name": "Deal Finder",
+  "description": "Cheapest in-stock medical marijuana deals at Florida dispensaries near you.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f2ea",
+  "theme_color": "#e2462c",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

@@ -1,0 +1,85 @@
+name: Refresh menus & deploy site
+
+on:
+  schedule:
+    # Every 3 hours from ~8am to ~11pm Eastern (UTC times; FL is UTC-4/-5).
+    - cron: "7 0,3,12,15,18,21 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: refresh
+  cancel-in-progress: false
+
+env:
+  SCRAPER_CONTACT: ${{ vars.SCRAPER_CONTACT || format('https://github.com/{0}', github.repository) }}
+  SHARDS: 6
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: npm test
+
+  scrape:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5]
+    env:
+      DB_PATH: data/shard-${{ matrix.shard }}.db
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - name: Scrape Trulieve + MÜV menus (shard ${{ matrix.shard }}/${{ env.SHARDS }})
+        run: npm run scrape -- --operators trulieve,muv --shard ${{ matrix.shard }}/${{ env.SHARDS }}
+      - name: Curaleaf store locations (menus not available)
+        if: matrix.shard == 0
+        run: npm run scrape -- --operators curaleaf --stores-only
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: db-${{ matrix.shard }}
+          path: data/shard-${{ matrix.shard }}.db
+          if-no-files-found: ignore
+          retention-days: 2
+
+  deploy:
+    needs: scrape
+    if: always() && needs.scrape.result != 'cancelled'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - uses: actions/download-artifact@v4
+        with: { path: shards, pattern: db-*, merge-multiple: true }
+      - id: pages
+        uses: actions/configure-pages@v5
+      - name: Build site (stores that failed this run keep the menu already live)
+        run: |
+          DBS=$(ls shards/*.db 2>/dev/null | sed 's/^/--db /' | tr '\n' ' ')
+          if [ -z "$DBS" ]; then echo "No scrape data at all; not deploying."; exit 1; fi
+          node --no-warnings scripts/build-site.ts $DBS \
+            --fallback-base "${{ steps.pages.outputs.base_url }}/" \
+            --repo-url "https://github.com/${{ github.repository }}"
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: site }
+      - id: deployment
+        uses: actions/deploy-pages@v4

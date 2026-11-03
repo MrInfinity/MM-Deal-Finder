@@ -1,0 +1,15 @@
+{
+  "name": "fl-deal-finder",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Aggregates Florida medical marijuana dispensary menus and finds the cheapest way to buy what you need.",
+  "type": "module",
+  "engines": { "node": ">=22.18" },
+  "scripts": {
+    "scrape": "node --no-warnings src/scrape.ts",
+    "start": "node --no-warnings src/server.ts",
+    "test": "node --no-warnings --test test/*.test.ts",
+    "build:demo": "node --no-warnings scripts/build-demo.ts",
+    "build:site": "node --no-warnings scripts/build-site.ts"
+  }
+}

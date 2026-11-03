@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FL Deal Finder — compare Florida medical marijuana prices</title>
+<meta name="description" content="Compare in-stock prices across Florida medical marijuana dispensaries and find the cheapest way to buy what you need — like 2 oz of flower — near you.">
+<meta property="og:title" content="FL Deal Finder">
+<meta property="og:description" content="Cheapest in-stock way to buy flower, vapes, concentrates and edibles at Florida dispensaries near you.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#e2462c">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Deal Finder">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<a class="skip" href="#results">Skip to results</a>
+<header class="top">
+  <div class="brand">
+    <span class="tag" aria-hidden="true">$/g</span>
+    <div>
+      <h1>FL Deal Finder</h1>
+      <p class="sub" id="freshness">Comparing Florida dispensary menus…</p>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div id="banner" class="banner" hidden></div>
+
+  <form id="search" autocomplete="off" role="search">
+    <label class="sr" for="q">What are you looking for?</label>
+    <div class="qrow">
+      <input id="q" name="q" type="search" placeholder="e.g. 2 oz flower" enterkeyhint="search">
+      <button type="submit" class="go">Search</button>
+    </div>
+    <div class="examples" id="examples" aria-label="Example searches"></div>
+
+    <div class="where">
+      <label class="zipl"><span class="sr">ZIP code</span><input id="zip" name="zip" inputmode="numeric" maxlength="5" pattern="\d{5}" placeholder="ZIP code" autocomplete="postal-code"></label>
+      <button type="button" id="locate" class="locate" title="Use my location">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>
+        <span>Near me</span>
+      </button>
+      <label><span class="sr">Search radius</span>
+        <select id="radius" name="radius">
+          <option value="5">within 5 mi</option><option value="10">within 10 mi</option><option value="25" selected>within 25 mi</option>
+          <option value="50">within 50 mi</option><option value="100">within 100 mi</option><option value="any">anywhere in FL</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="quick" aria-label="Quick filters">
+      <button type="button" class="chip" id="qOpen" aria-pressed="false">Open now</button>
+      <button type="button" class="chip" id="qSale" aria-pressed="false">On sale</button>
+      <button type="button" class="chip" id="qWhole" aria-pressed="false">No shake/ground</button>
+    </div>
+
+    <details id="filters">
+      <summary>More filters <span id="filterCount" class="count"></span></summary>
+      <div class="fgrid">
+        <fieldset>
+          <legend>Category</legend>
+          <div class="chips" id="catChips"></div>
+        </fieldset>
+
+        <fieldset>
+          <legend>How much do you want?</legend>
+          <div class="inline">
+            <input id="targetAmt" type="number" min="0" step="any" placeholder="e.g. 2" inputmode="decimal" aria-label="Amount">
+            <select id="targetUnit" aria-label="Unit"><option value="oz">oz</option><option value="g">g</option><option value="mg">mg THC</option></select>
+          </div>
+          <p class="hint">Finds the cheapest mix of package sizes at one store that gets you at least this much.</p>
+        </fieldset>
+
+        <fieldset id="sizeField">
+          <legend>Package size (grams)</legend>
+          <div class="chips" id="sizeChips"></div>
+        </fieldset>
+
+        <fieldset>
+          <legend>THC &amp; price</legend>
+          <div class="inline">
+            <label>Min THC <input id="minThc" type="number" min="0" max="100" step="1" placeholder="—" inputmode="decimal">%</label>
+            <label>Max $ per package <input id="maxPrice" type="number" min="0" step="1" placeholder="—" inputmode="decimal"></label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Strain type</legend>
+          <div class="chips" id="strainChips"></div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Dispensaries</legend>
+          <div class="chips" id="opChips"></div>
+          <p class="hint">None selected = all.</p>
+        </fieldset>
+
+        <fieldset>
+          <legend>Add specific stores</legend>
+          <input id="storePick" list="storeList" placeholder="Type a city or store…" aria-label="Add a store">
+          <datalist id="storeList"></datalist>
+          <div class="chips" id="storeChips"></div>
+          <label class="check"><input type="checkbox" id="onlyStores"> Only search these stores</label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Sort</legend>
+          <div class="inline">
+            <label>Products
+              <select id="sort">
+                <option value="unit">Best $/gram (or $/mg)</option>
+                <option value="thcValue">Best $ per mg THC</option>
+                <option value="price">Lowest price</option>
+                <option value="thc">Highest THC %</option>
+                <option value="distance">Nearest</option>
+              </select>
+            </label>
+            <label>Buy plans
+              <select id="planSort">
+                <option value="price">Lowest total</option>
+                <option value="thcValue">Most THC per $</option>
+                <option value="distance">Nearest</option>
+              </select>
+            </label>
+          </div>
+        </fieldset>
+        <button type="button" id="reset" class="link">Clear filters</button>
+      </div>
+    </details>
+  </form>
+
+  <div id="results" tabindex="-1">
+    <section id="welcome" class="welcome" hidden></section>
+    <section id="status" class="status" aria-live="polite"></section>
+    <section id="plans"></section>
+    <section id="products"></section>
+    <section id="nomenu"></section>
+  </div>
+</main>
+
+<footer>
+  <details class="about">
+    <summary>About FL Deal Finder</summary>
+    <p><b>What it does.</b> Collects the public online menus of Florida medical marijuana dispensaries and shows
+      the cheapest in-stock way to get what you want. Ask for an amount (like “2 oz flower”) and it works out the cheapest mix of package sizes at a single store.</p>
+    <p><b>Coverage.</b> <span id="coverage">Trulieve and MÜV menus. Curaleaf locations are listed but their menus aren't included yet.</span>
+      Stores using Dutchie or Jane menus (GrowHealthy, Jungle Boys, Green Dragon and others) aren't included.</p>
+    <p><b>Stock &amp; prices.</b> Only items the dispensary reports as in stock are shown, using menus refreshed several times a day.
+      Things can sell out between refreshes, so confirm on the dispensary's site before you go. On Trulieve's site, select the same store first:
+      it shows stock for whichever store you have selected there. Prices are menu prices before any loyalty or first-time discounts. Store hours are regular weekly hours; holidays may differ.</p>
+    <p><b>Privacy.</b> No accounts and no tracking. Your ZIP and settings are stored only in your browser. “Near me” uses your location once to pick the nearest ZIP code; it isn't stored or shared, and shared links never include your ZIP.</p>
+    <p><b>Not affiliated</b> with any dispensary. Not medical advice. Florida medical marijuana purchases require an active
+      Medical Marijuana Use Registry card, and state purchase limits apply.</p>
+  </details>
+  <p>Prices and stock come from each dispensary's public online menu and can change at any time.<!--REPO--></p>
+</footer>
+<script src="app.js" type="module"></script>
+</body>
+</html>
